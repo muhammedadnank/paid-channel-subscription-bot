@@ -1,3 +1,6 @@
+import dns from "node:dns";
+dns.setDefaultResultOrder("ipv4first");
+
 import { webhookCallback } from "grammy";
 import { createBot } from "../src/bot/app.js";
 import { connectToDatabase } from "../src/db/connection.js";

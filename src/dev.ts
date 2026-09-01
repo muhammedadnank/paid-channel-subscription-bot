@@ -1,3 +1,6 @@
+import dns from "node:dns";
+dns.setDefaultResultOrder("ipv4first");
+
 import "dotenv/config";
 import { createBot } from "./bot/app.js";
 import { connectToDatabase } from "./db/connection.js";
@@ -17,14 +20,6 @@ async function startLocalDev() {
   console.log("🤖 Fetching Bot Info from Telegram...");
   await bot.init();
   console.log(`🤖 Logged in as @${bot.botInfo.username} (ID: ${bot.botInfo.id})`);
-
-  console.log("🧹 Clearing active Telegram Webhook for long-polling...");
-  try {
-    await bot.api.deleteWebhook({ drop_pending_updates: true });
-    console.log("✅ Webhook cleared successfully.");
-  } catch (err: any) {
-    console.warn("⚠️ Warning clearing webhook:", err.message);
-  }
 
   console.log("🚀 Starting local Telegram bot long-polling...");
   console.log("✅ Bot is online & listening for updates! Send /start on Telegram.");
