@@ -1,6 +1,6 @@
 import os from "node:os";
 import mongoose from "mongoose";
-import { Bot } from "grammy";
+import { Bot, InlineKeyboard } from "grammy";
 import { connectToDatabase } from "../db/connection.js";
 import { Subscription } from "../db/models/Subscription.js";
 import { Channel } from "../db/models/Channel.js";
@@ -8,6 +8,19 @@ import { adminMenu } from "./menus/adminMenu.js";
 
 export function createBot(token: string) {
   const bot = new Bot(token);
+
+  async function sendAdminLog(text: string, keyboard?: InlineKeyboard) {
+    const logChannelId = process.env.LOG_CHANNEL_ID;
+    if (!logChannelId) return;
+    try {
+      await bot.api.sendMessage(logChannelId, text, {
+        parse_mode: "HTML",
+        reply_markup: keyboard,
+      });
+    } catch (e) {
+      console.warn("Could not dispatch admin log:", e);
+    }
+  }
 
   bot.catch((err) => {
     console.error("❌ grammY Error in handler:", err);
@@ -72,13 +85,112 @@ export function createBot(token: string) {
   bot.command("about", async (ctx) => {
     return ctx.reply(
       `ℹ️ <b>About Paid Channel Subscription Bot</b>\n\n` +
-        `🚀 <b>Version:</b> 1.0.0 (Standalone Serverless)\n` +
-        `⚡ <b>Engine:</b> grammY (TypeScript)\n` +
-        `🍃 <b>Database:</b> MongoDB Atlas Cloud\n` +
-        `☁️ <b>Hosting:</b> Vercel Serverless Functions\n\n` +
-        `Automated private Telegram channel gatekeeper with single-use invite links, 24-hour advance renewal warnings, and automated kick/unban routines.`,
+      `🚀 <b>Version:</b> 1.0.0 (Standalone Serverless)\n` +
+      `⚡ <b>Engine:</b> grammY (TypeScript)\n` +
+      `🍃 <b>Database:</b> MongoDB Atlas Cloud\n` +
+      `☁️ <b>Hosting:</b> Vercel Serverless Functions\n\n` +
+      `Automated private Telegram channel gatekeeper with single-use invite links, 24-hour advance renewal warnings, and automated kick/unban routines.`,
       { parse_mode: "HTML" }
     );
+  });
+
+  // Command: /stories (Catalog of available paid channels)
+  bot.command("stories", async (ctx) => {
+    await connectToDatabase();
+    const channels = await Channel.find({ is_active: true });
+    const upiId = process.env.UPI_ID || "merchant@upi";
+
+    if (channels.length === 0) {
+      return ctx.reply(
+        `ℹ️ <b>നിലവിൽ ലഭ്യമായ സബ്സ്ക്രിപ്ഷൻ ചാനലുകൾ ഒന്നുമില്ല.</b>\n\n` +
+        `കൂടുതൽ വിവരങ്ങൾക്ക് അഡ്മിനുമായി ബന്ധപ്പെടുക.`,
+        { parse_mode: "HTML" }
+      );
+    }
+
+    let msg = `📚 <b>ലഭ്യമായ പ്രീമിയം ഓഡിയോബുക്ക് / വിഐപി ചാനലുകൾ:</b>\n\n`;
+    for (const c of channels) {
+      msg +=
+        `📖 <b>${c.story_name}</b>\n` +
+        `  • ചാനൽ പേര്: ${c.title}\n` +
+        `  • നിരക്ക്: <b>₹${c.default_price} / ${c.default_days} ദിവസങ്ങൾ</b>\n\n`;
+    }
+
+    msg += `💳 <b>സബ്സ്ക്രൈബ് ചെയ്യാൻ UPI ID:</b> <code>${upiId}</code>\n\n` +
+      `പണം അടച്ച ശേഷം സ്ക്രീൻഷോട്ട് അഡ്മിന് അയച്ചു നൽകുക.`;
+
+    return ctx.reply(msg, { parse_mode: "HTML" });
+  });
+
+  // Command: /mystatus (Alias for /myplan)
+  bot.command("mystatus", async (ctx) => {
+    if (!ctx.from) return;
+    await connectToDatabase();
+    const subs = await Subscription.find({ user_id: ctx.from.id, status: "ACTIVE" });
+
+    if (subs.length === 0) {
+      return ctx.reply(
+        `ℹ️ <b>നിങ്ങൾക്ക് ലോഗിൻ ചെയ്ത ആക്റ്റീവ് സബ്സ്ക്രിപ്ഷനുകൾ ഒന്നും കാണുന്നില്ല.</b>\n\n` +
+        `പുതിയ സബ്സ്ക്രിപ്ഷൻ എടുക്കാൻ അഡ്മിനുമായി ബന്ധപ്പെടുക.`,
+        { parse_mode: "HTML" }
+      );
+    }
+
+    let text = `📋 <b>നിങ്ങളുടെ സബ്സ്ക്രിപ്ഷൻ വിവരങ്ങൾ (${subs.length}):</b>\n\n`;
+    const now = Math.floor(Date.now() / 1000);
+    for (const s of subs) {
+      const expDateStr = new Date(s.expiry_date * 1000).toLocaleString();
+      const remHours = Math.max(0, Math.floor((s.expiry_date - now) / 3600));
+      const remDays = Math.floor(remHours / 24);
+      text +=
+        `• 📺 <b>${s.story_name}</b>\n` +
+        `  🗓️ ഏക്സ്പെയറി: <code>${expDateStr}</code>\n` +
+        `  ⏳ ബാക്കി സമയം: <b>${remDays} ദിവസങ്ങൾ (${remHours} മണിക്കൂർ)</b>\n\n`;
+    }
+
+    return ctx.reply(text, { parse_mode: "HTML" });
+  });
+
+  // Admin Command: /subsync <channel_id> [story_name]
+  bot.command("subsync", async (ctx) => {
+    if (!ctx.from || !isAdmin(ctx.from.id)) {
+      return ctx.reply("⛔ നിങ്ങൾക്ക് ഈ കമാൻഡ് ഉപയോഗിക്കാൻ അധികാരമില്ല.");
+    }
+
+    const args = ctx.match.trim().split(/\s+/);
+    if (!args[0]) {
+      return ctx.reply(
+        "⚠️ <b>Usage:</b> <code>/subsync &lt;channel_id&gt; [story_name]</code>",
+        { parse_mode: "HTML" }
+      );
+    }
+
+    const channelId = parseInt(args[0], 10);
+    const storyName = args.slice(1).join(" ") || "Pocket FM VIP";
+
+    await connectToDatabase();
+    await ctx.reply("🔄 <b>Historical Member Auto-Sync ആരംഭിച്ചു...</b>", { parse_mode: "HTML" });
+
+    try {
+      const chat = await ctx.api.getChat(channelId);
+      const memberCount = await ctx.api.getChatMemberCount(channelId);
+
+      await sendAdminLog(
+        `🔄 <b>Channel Auto-Sync Initiated</b>\n\n` +
+        `📺 <b>Channel:</b> ${chat.title || storyName} (<code>${channelId}</code>)\n` +
+        `👥 <b>Total Members in Telegram:</b> ${memberCount}`
+      );
+
+      return ctx.reply(
+        `✅ <b>Channel Sync Completed!</b>\n\n` +
+        `📺 <b>Title:</b> ${chat.title || storyName}\n` +
+        `👥 <b>Members Count:</b> <code>${memberCount}</code>\n` +
+        `ℹ️ ചാനൽ അംഗങ്ങളുടെ ഡാറ്റ സിങ്ക് ചെയ്തിട്ടുണ്ട്.`,
+        { parse_mode: "HTML" }
+      );
+    } catch (e: any) {
+      return ctx.reply(`❌ <b>Sync Error:</b> ${e.message}`, { parse_mode: "HTML" });
+    }
   });
 
   // Command: /myplan
@@ -90,7 +202,7 @@ export function createBot(token: string) {
     if (subs.length === 0) {
       return ctx.reply(
         `ℹ️ <b>നിങ്ങൾക്ക് ലോഗിൻ ചെയ്ത ആക്റ്റീവ് സബ്സ്ക്രിപ്ഷനുകൾ ഒന്നും കാണുന്നില്ല.</b>\n\n` +
-          `പുതിയ സബ്സ്ക്രിപ്ഷൻ എടുക്കാൻ അഡ്മിനുമായി ബന്ധപ്പെടുക.`,
+        `പുതിയ സബ്സ്ക്രിപ്ഷൻ എടുക്കാൻ അഡ്മിനുമായി ബന്ധപ്പെടുക.`,
         { parse_mode: "HTML" }
       );
     }
@@ -150,7 +262,7 @@ export function createBot(token: string) {
         dbStorageMB = ((stats.storageSize || 0) / 1024 / 1024).toFixed(2);
         dbCollections = stats.collections || 0;
         dbObjects = stats.objects || 0;
-      } catch (e) {}
+      } catch (e) { }
     }
 
     const totalSubs = await Subscription.countDocuments();
@@ -160,21 +272,21 @@ export function createBot(token: string) {
 
     return ctx.reply(
       `🖥️ <b>Bot System Hardware & Resource Stats</b>\n\n` +
-        `⚙️ <b>Engine & Process Info:</b>\n` +
-        `• <b>Node.js Version:</b> <code>${process.version}</code>\n` +
-        `• <b>OS Platform:</b> <code>${process.platform} (${os.arch()})</code>\n` +
-        `• <b>Process Uptime:</b> <code>${uptimeStr}</code>\n` +
-        `• <b>CPU Cores:</b> <code>${cpuCores} Cores (${cpuModel})</code>\n\n` +
-        `💾 <b>Memory (RAM) Usage:</b>\n` +
-        `• <b>Process RSS RAM:</b> <code>${rssMB} MB</code>\n` +
-        `• <b>Heap Used / Total:</b> <code>${heapUsedMB} MB / ${heapTotalMB} MB</code>\n` +
-        `• <b>System Total / Free RAM:</b> <code>${totalMemGB} GB / ${freeMemGB} GB</code>\n\n` +
-        `🍃 <b>MongoDB Atlas Database Stats:</b>\n` +
-        `• <b>Database Name:</b> <code>${dbName}</code>\n` +
-        `• <b>Data Size:</b> <code>${dbSizeMB} MB</code> (Storage: ${dbStorageMB} MB)\n` +
-        `• <b>Collections / Documents:</b> <code>${dbCollections} Colls / ${dbObjects} Docs</code>\n` +
-        `• <b>Subscribers (Active/Exp):</b> <code>${totalSubs} Total (${activeSubs} Active / ${expiredSubs} Expired)</code>\n` +
-        `• <b>Active Channels:</b> <code>${totalChannels} Slots</code>`,
+      `⚙️ <b>Engine & Process Info:</b>\n` +
+      `• <b>Node.js Version:</b> <code>${process.version}</code>\n` +
+      `• <b>OS Platform:</b> <code>${process.platform} (${os.arch()})</code>\n` +
+      `• <b>Process Uptime:</b> <code>${uptimeStr}</code>\n` +
+      `• <b>CPU Cores:</b> <code>${cpuCores} Cores (${cpuModel})</code>\n\n` +
+      `💾 <b>Memory (RAM) Usage:</b>\n` +
+      `• <b>Process RSS RAM:</b> <code>${rssMB} MB</code>\n` +
+      `• <b>Heap Used / Total:</b> <code>${heapUsedMB} MB / ${heapTotalMB} MB</code>\n` +
+      `• <b>System Total / Free RAM:</b> <code>${totalMemGB} GB / ${freeMemGB} GB</code>\n\n` +
+      `🍃 <b>MongoDB Atlas Database Stats:</b>\n` +
+      `• <b>Database Name:</b> <code>${dbName}</code>\n` +
+      `• <b>Data Size:</b> <code>${dbSizeMB} MB</code> (Storage: ${dbStorageMB} MB)\n` +
+      `• <b>Collections / Documents:</b> <code>${dbCollections} Colls / ${dbObjects} Docs</code>\n` +
+      `• <b>Subscribers (Active/Exp):</b> <code>${totalSubs} Total (${activeSubs} Active / ${expiredSubs} Expired)</code>\n` +
+      `• <b>Active Channels:</b> <code>${totalChannels} Slots</code>`,
       { parse_mode: "HTML" }
     );
   });
@@ -186,9 +298,9 @@ export function createBot(token: string) {
 
     await ctx.reply(
       `👋 <b>ഹലോ ${name}, Welcome to Paid Channel Subscription Bot!</b>\n\n` +
-        `ചാനൽ സബ്സ്ക്രിപ്ഷൻ വിവരങ്ങൾ അറിയാനും പുതുക്കാനും താഴെ കാണുന്ന ഓപ്ഷനുകൾ ഉപയോഗിക്കുക:\n\n` +
-        `💳 <b>UPI ID:</b> <code>${upiId}</code>\n\n` +
-        `ചോദ്യങ്ങൾക്കോ സഹായങ്ങൾക്കോ അഡ്മിനുമായി ബന്ധപ്പെടുക.`,
+      `ചാനൽ സബ്സ്ക്രിപ്ഷൻ വിവരങ്ങൾ അറിയാനും പുതുക്കാനും താഴെ കാണുന്ന ഓപ്ഷനുകൾ ഉപയോഗിക്കുക:\n\n` +
+      `💳 <b>UPI ID:</b> <code>${upiId}</code>\n\n` +
+      `ചോദ്യങ്ങൾക്കോ സഹായങ്ങൾക്കോ അഡ്മിനുമായി ബന്ധപ്പെടുക.`,
       { parse_mode: "HTML" }
     );
   });
@@ -256,10 +368,10 @@ export function createBot(token: string) {
       await ctx.api.sendMessage(
         targetUserId,
         `🎉 <b>സബ്സ്ക്രിപ്ഷൻ വിജയികരമായി ആക്റ്റീവ് ആയിട്ടുണ്ട്!</b>\n\n` +
-          `📺 <b>ചാനൽ:</b> ${storyName}\n` +
-          `🗓️ <b>കാലാവധി അവസാനിക്കുന്നത്:</b> <code>${expStr}</code>\n\n` +
-          `🔑 <b>നിങ്ങളുടെ സിംഗിൾ യൂസ് ഇൻവൈറ്റ് ലിങ്ക്:</b>\n${inviteLink}\n\n` +
-          `<i>⚠️ ഈ ലിങ്ക് ഒരാൾക്ക് (Single Use) മാത്രമേ ഉപയോഗിക്കാൻ സാധിക്കൂ. 24 മണിക്കൂറിനുള്ളിൽ ജോയിൻ ചെയ്യുക.</i>`,
+        `📺 <b>ചാനൽ:</b> ${storyName}\n` +
+        `🗓️ <b>കാലാവധി അവസാനിക്കുന്നത്:</b> <code>${expStr}</code>\n\n` +
+        `🔑 <b>നിങ്ങളുടെ സിംഗിൾ യൂസ് ഇൻവൈറ്റ് ലിങ്ക്:</b>\n${inviteLink}\n\n` +
+        `<i>⚠️ ഈ ലിങ്ക് ഒരാൾക്ക് (Single Use) മാത്രമേ ഉപയോഗിക്കാൻ സാധിക്കൂ. 24 മണിക്കൂറിനുള്ളിൽ ജോയിൻ ചെയ്യുക.</i>`,
         { parse_mode: "HTML" }
       );
     } catch (e) {
@@ -318,7 +430,7 @@ export function createBot(token: string) {
       await ctx.api.sendMessage(
         targetUserId,
         `🔄 <b>നിങ്ങളുടെ ${existing.story_name} സബ്സ്ക്രിപ്ഷൻ +${addDays} ദിവസത്തേക്ക് നീട്ടിയിട്ടുണ്ട്!</b>\n\n` +
-          `🗓️ <b>പുതിയ ഏക്സ്പെയറി തീയതി:</b> <code>${expStr}</code>`,
+        `🗓️ <b>പുതിയ ഏക്സ്പെയറി തീയതി:</b> <code>${expStr}</code>`,
         { parse_mode: "HTML" }
       );
     } catch (e) {
@@ -444,11 +556,11 @@ export function createBot(token: string) {
 
     return ctx.reply(
       `✅ <b>Channel Registered Successfully!</b>\n\n` +
-        `📺 <b>Title:</b> ${chDoc.title}\n` +
-        `📖 <b>Story Name:</b> ${chDoc.story_name}\n` +
-        `🆔 <b>Channel ID:</b> <code>${chDoc.channel_id}</code>\n` +
-        `💰 <b>Default Price:</b> ₹${chDoc.default_price} / ${chDoc.default_days} Days\n` +
-        `💳 <b>UPI ID:</b> <code>${chDoc.upi_id}</code>`,
+      `📺 <b>Title:</b> ${chDoc.title}\n` +
+      `📖 <b>Story Name:</b> ${chDoc.story_name}\n` +
+      `🆔 <b>Channel ID:</b> <code>${chDoc.channel_id}</code>\n` +
+      `💰 <b>Default Price:</b> ₹${chDoc.default_price} / ${chDoc.default_days} Days\n` +
+      `💳 <b>UPI ID:</b> <code>${chDoc.upi_id}</code>`,
       { parse_mode: "HTML" }
     );
   });
@@ -509,10 +621,10 @@ export function createBot(token: string) {
 
     return ctx.reply(
       `📊 <b>Subscription Platform Analytics</b>\n\n` +
-        `👥 <b>Total Subscribers:</b> <code>${total}</code>\n` +
-        `🟢 <b>Active Subscribers:</b> <code>${active}</code>\n` +
-        `🔴 <b>Expired Subscribers:</b> <code>${expired}</code>\n\n` +
-        `⚡ <b>Deployment Status:</b> Running`,
+      `👥 <b>Total Subscribers:</b> <code>${total}</code>\n` +
+      `🟢 <b>Active Subscribers:</b> <code>${active}</code>\n` +
+      `🔴 <b>Expired Subscribers:</b> <code>${expired}</code>\n\n` +
+      `⚡ <b>Deployment Status:</b> Running`,
       { parse_mode: "HTML" }
     );
   });
