@@ -1,6 +1,7 @@
 import { Bot } from "grammy";
 import { connectToDatabase } from "../db/connection.js";
 import { Subscription } from "../db/models/Subscription.js";
+import { Channel } from "../db/models/Channel.js";
 import { adminMenu } from "./menus/adminMenu.js";
 
 export function createBot(token: string) {
@@ -253,6 +254,105 @@ export function createBot(token: string) {
     }
 
     return ctx.reply(msg, { parse_mode: "HTML" });
+  });
+
+  // Admin Command: /channeladd <channel_id> <story_name> [price=60] [days=30] [upi_id]
+  bot.command("channeladd", async (ctx) => {
+    if (!ctx.from || !isAdmin(ctx.from.id)) {
+      return ctx.reply("⛔ നിങ്ങൾക്ക് ഈ കമാൻഡ് ഉപയോഗിക്കാൻ അധികാരമില്ല.");
+    }
+
+    const args = ctx.match.trim().split(/\s+/);
+    if (args.length < 2 || !args[0] || !args[1]) {
+      return ctx.reply(
+        "⚠️ <b>Usage:</b> <code>/channeladd &lt;channel_id&gt; &lt;story_name&gt; [price=60] [days=30] [upi_id]</code>",
+        { parse_mode: "HTML" }
+      );
+    }
+
+    const channelId = parseInt(args[0], 10);
+    const storyName = args[1];
+    const price = args[2] ? parseFloat(args[2]) : 60;
+    const days = args[3] ? parseInt(args[3], 10) : 30;
+    const upiId = args[4] || process.env.UPI_ID || "merchant@upi";
+
+    await connectToDatabase();
+
+    let title = storyName;
+    try {
+      const chat = await ctx.api.getChat(channelId);
+      title = chat.title || storyName;
+    } catch (e) {
+      console.warn(`Could not fetch chat title for ${channelId}, using storyName.`);
+    }
+
+    const chDoc = await Channel.findOneAndUpdate(
+      { channel_id: channelId },
+      {
+        channel_id: channelId,
+        title,
+        story_name: storyName,
+        default_price: price,
+        default_days: days,
+        upi_id: upiId,
+        log_channel_id: channelId,
+        is_active: true,
+      },
+      { upsert: true, new: true }
+    );
+
+    return ctx.reply(
+      `✅ <b>Channel Registered Successfully!</b>\n\n` +
+        `📺 <b>Title:</b> ${chDoc.title}\n` +
+        `📖 <b>Story Name:</b> ${chDoc.story_name}\n` +
+        `🆔 <b>Channel ID:</b> <code>${chDoc.channel_id}</code>\n` +
+        `💰 <b>Default Price:</b> ₹${chDoc.default_price} / ${chDoc.default_days} Days\n` +
+        `💳 <b>UPI ID:</b> <code>${chDoc.upi_id}</code>`,
+      { parse_mode: "HTML" }
+    );
+  });
+
+  // Admin Command: /channellist
+  bot.command("channellist", async (ctx) => {
+    if (!ctx.from || !isAdmin(ctx.from.id)) {
+      return ctx.reply("⛔ നിങ്ങൾക്ക് ഈ കമാൻഡ് ഉപയോഗിക്കാൻ അധികാരമില്ല.");
+    }
+
+    await connectToDatabase();
+    const channels = await Channel.find({ is_active: true });
+
+    if (channels.length === 0) {
+      return ctx.reply("ℹ️ No active channels registered in database.");
+    }
+
+    let msg = `<b>📺 Registered Paid Channels (${channels.length})</b>\n\n`;
+    for (const c of channels) {
+      msg += `• <b>${c.story_name}</b> | <code>${c.channel_id}</code> | ₹${c.default_price}/${c.default_days}d\n`;
+    }
+
+    return ctx.reply(msg, { parse_mode: "HTML" });
+  });
+
+  // Admin Command: /channelrem <channel_id>
+  bot.command("channelrem", async (ctx) => {
+    if (!ctx.from || !isAdmin(ctx.from.id)) {
+      return ctx.reply("⛔ നിങ്ങൾക്ക് ഈ കമാൻഡ് ഉപയോഗിക്കാൻ അധികാരമില്ല.");
+    }
+
+    const args = ctx.match.trim().split(/\s+/);
+    if (!args[0]) {
+      return ctx.reply("⚠️ <b>Usage:</b> <code>/channelrem &lt;channel_id&gt;</code>", {
+        parse_mode: "HTML",
+      });
+    }
+
+    const channelId = parseInt(args[0], 10);
+    await connectToDatabase();
+
+    await Channel.findOneAndUpdate({ channel_id: channelId }, { is_active: false });
+    return ctx.reply(`🗑️ Channel slot <code>${channelId}</code> deactivated.`, {
+      parse_mode: "HTML",
+    });
   });
 
   // Admin Command: /substats
