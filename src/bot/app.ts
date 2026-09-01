@@ -217,13 +217,18 @@ export function createBot(token: string) {
           `✅ <b>Synced Active Members in DB:</b> ${syncedCount}`
       );
 
-      return ctx.reply(
-        `✅ <b>Channel Sync Completed!</b>\n\n` +
-          `📺 <b>Title:</b> ${chat.title || storyName}\n` +
-          `👥 <b>Telegram Members Count:</b> <code>${memberCount}</code>\n` +
-          `📊 <b>Synced Members in DB:</b> <code>${syncedCount}</code>`,
-        { parse_mode: "HTML" }
-      );
+      if (userIds.length === 0) {
+        return ctx.reply(
+          `✅ <b>Channel Verified!</b>\n\n` +
+            `📺 <b>Title:</b> ${chat.title || storyName}\n` +
+            `👥 <b>Total Telegram Members:</b> <code>${memberCount}</code>\n\n` +
+            `💡 <b>ഉപയോക്താക്കളെ സിങ്ക് ചെയ്യാൻ:</b>\n` +
+            `യൂസറുടെ ID-കൾ കമാൻഡിനൊപ്പം ചേർത്ത് അയക്കുക:\n` +
+            `<code>/subsync ${channelId} &lt;user_id_1&gt; &lt;user_id_2&gt;</code>\n\n` +
+            `ഉദാഹരണത്തിന്: <code>/subsync ${channelId} 8123066073 12345678</code>`,
+          { parse_mode: "HTML" }
+        );
+      }
     } catch (e: any) {
       return ctx.reply(`❌ <b>Sync Error:</b> ${e.message}`, { parse_mode: "HTML" });
     }
