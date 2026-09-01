@@ -175,17 +175,50 @@ export function createBot(token: string) {
       const chat = await ctx.api.getChat(channelId);
       const memberCount = await ctx.api.getChatMemberCount(channelId);
 
+      const userIds = args.slice(1).map((id) => parseInt(id, 10)).filter((id) => !isNaN(id));
+      let syncedCount = 0;
+      const now = Math.floor(Date.now() / 1000);
+      const expiryTs = now + 30 * 86400;
+
+      for (const uid of userIds) {
+        try {
+          const member = await ctx.api.getChatMember(channelId, uid);
+          if (["member", "administrator", "creator"].includes(member.status)) {
+            await Subscription.findOneAndUpdate(
+              { user_id: uid, channel_id: channelId },
+              {
+                user_id: uid,
+                channel_id: channelId,
+                story_name: chat.title || storyName,
+                name: member.user.first_name || `Subscriber (${uid})`,
+                days: 30,
+                amount: 60,
+                status: "ACTIVE",
+                joined_date: now,
+                expiry_date: expiryTs,
+                reminded_24h: false,
+              },
+              { upsert: true, new: true }
+            );
+            syncedCount++;
+          }
+        } catch (e) {
+          console.warn(`Could not verify chat member ${uid}:`, e);
+        }
+      }
+
       await sendAdminLog(
-        `🔄 <b>Channel Auto-Sync Initiated</b>\n\n` +
-        `📺 <b>Channel:</b> ${chat.title || storyName} (<code>${channelId}</code>)\n` +
-        `👥 <b>Total Members in Telegram:</b> ${memberCount}`
+        `🔄 <b>Channel Auto-Sync Completed</b>\n\n` +
+          `📺 <b>Channel:</b> ${chat.title || storyName} (<code>${channelId}</code>)\n` +
+          `👥 <b>Total Telegram Members:</b> ${memberCount}\n` +
+          `✅ <b>Synced Active Members in DB:</b> ${syncedCount}`
       );
 
       return ctx.reply(
         `✅ <b>Channel Sync Completed!</b>\n\n` +
-        `📺 <b>Title:</b> ${chat.title || storyName}\n` +
-        `👥 <b>Members Count:</b> <code>${memberCount}</code>\n` +
-        `ℹ️ ചാനൽ അംഗങ്ങളുടെ ഡാറ്റ സിങ്ക് ചെയ്തിട്ടുണ്ട്.`,
+          `📺 <b>Title:</b> ${chat.title || storyName}\n` +
+          `👥 <b>Telegram Members Count:</b> <code>${memberCount}</code>\n` +
+          `📊 <b>Synced Members in DB:</b> <code>${syncedCount}</code>`,
         { parse_mode: "HTML" }
       );
     } catch (e: any) {
