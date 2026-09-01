@@ -109,6 +109,131 @@ export function createBot(token: string) {
     );
   });
 
+  // Admin Command: /subextend <user_id> [additional_days=30] [amount] [channel_id]
+  bot.command("subextend", async (ctx) => {
+    if (!ctx.from || !isAdmin(ctx.from.id)) {
+      return ctx.reply("⛔ നിങ്ങൾക്ക് ഈ കമാൻഡ് ഉപയോഗിക്കാൻ അധികാരമില്ല.");
+    }
+
+    const args = ctx.match.trim().split(/\s+/);
+    if (args.length < 1 || !args[0]) {
+      return ctx.reply(
+        "⚠️ <b>Usage:</b> <code>/subextend <user_id> [additional_days=30] [amount] [channel_id]</code>",
+        { parse_mode: "HTML" }
+      );
+    }
+
+    const targetUserId = parseInt(args[0], 10);
+    const addDays = args[1] ? parseFloat(args[1]) : 30;
+    const channelId = args[3]
+      ? parseInt(args[3], 10)
+      : parseInt(process.env.DEFAULT_CHANNEL_ID || "0", 10);
+
+    await connectToDatabase();
+    const existing = await Subscription.findOne({
+      user_id: targetUserId,
+      ...(channelId ? { channel_id: channelId } : {}),
+    });
+
+    if (!existing) {
+      return ctx.reply(`❌ No existing subscription record found for user <code>${targetUserId}</code>.`);
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    const baseTime = Math.max(existing.expiry_date, now);
+    const newExpiry = baseTime + addDays * 86400;
+
+    existing.expiry_date = newExpiry;
+    existing.status = "ACTIVE";
+    existing.reminded_24h = false;
+    existing.days += addDays;
+    if (args[2]) existing.amount = parseFloat(args[2]);
+    await existing.save();
+
+    const expStr = new Date(newExpiry * 1000).toLocaleString();
+    try {
+      await ctx.api.sendMessage(
+        targetUserId,
+        `🔄 <b>നിങ്ങളുടെ ${existing.story_name} സബ്സ്ക്രിപ്ഷൻ +${addDays} ദിവസത്തേക്ക് നീട്ടിയിട്ടുണ്ട്!</b>\n\n` +
+          `🗓️ <b>പുതിയ ഏക്സ്പെയറി തീയതി:</b> <code>${expStr}</code>`,
+        { parse_mode: "HTML" }
+      );
+    } catch (e) {
+      console.error("Failed to send extension DM:", e);
+    }
+
+    return ctx.reply(
+      `✅ Extended subscription for <code>${targetUserId}</code> by +${addDays} days. New Expiry: <code>${expStr}</code>`,
+      { parse_mode: "HTML" }
+    );
+  });
+
+  // Admin Command: /subrem <user_id> [channel_id]
+  bot.command("subrem", async (ctx) => {
+    if (!ctx.from || !isAdmin(ctx.from.id)) {
+      return ctx.reply("⛔ നിങ്ങൾക്ക് ഈ കമാൻഡ് ഉപയോഗിക്കാൻ അധികാരമില്ല.");
+    }
+
+    const args = ctx.match.trim().split(/\s+/);
+    if (args.length < 1 || !args[0]) {
+      return ctx.reply(
+        "⚠️ <b>Usage:</b> <code>/subrem <user_id> [channel_id]</code>",
+        { parse_mode: "HTML" }
+      );
+    }
+
+    const targetUserId = parseInt(args[0], 10);
+    const channelId = args[1]
+      ? parseInt(args[1], 10)
+      : parseInt(process.env.DEFAULT_CHANNEL_ID || "0", 10);
+
+    await connectToDatabase();
+    const existing = await Subscription.findOne({ user_id: targetUserId, channel_id: channelId });
+    if (!existing) {
+      return ctx.reply(`❌ No active subscription record found for user <code>${targetUserId}</code>.`);
+    }
+
+    existing.status = "REMOVED";
+    await existing.save();
+
+    // Execute Channel Kick via Telegram API if channelId exists
+    if (channelId) {
+      try {
+        await ctx.api.banChatMember(channelId, targetUserId);
+        await ctx.api.unbanChatMember(channelId, targetUserId);
+      } catch (err: any) {
+        console.error(`Failed to kick user ${targetUserId} from channel ${channelId}:`, err.message);
+      }
+    }
+
+    return ctx.reply(
+      `🗑️ Revoked subscription and kicked user <code>${targetUserId}</code> from channel.`,
+      { parse_mode: "HTML" }
+    );
+  });
+
+  // Admin Command: /sublist
+  bot.command("sublist", async (ctx) => {
+    if (!ctx.from || !isAdmin(ctx.from.id)) {
+      return ctx.reply("⛔ നിങ്ങൾക്ക് ഈ കമാൻഡ് ഉപയോഗിക്കാൻ അധികാരമില്ല.");
+    }
+
+    await connectToDatabase();
+    const subs = await Subscription.find({ status: "ACTIVE" }).limit(50);
+
+    if (subs.length === 0) {
+      return ctx.reply("ℹ️ No active subscribers found in database.");
+    }
+
+    let msg = `<b>📋 Active Subscribers List (${subs.length})</b>\n\n`;
+    for (const s of subs) {
+      const expStr = new Date(s.expiry_date * 1000).toLocaleDateString();
+      msg += `• <code>${s.user_id}</code> | ${s.name} | ${s.story_name} | Exp: ${expStr}\n`;
+    }
+
+    return ctx.reply(msg, { parse_mode: "HTML" });
+  });
+
   // Admin Command: /substats
   bot.command("substats", async (ctx) => {
     if (!ctx.from || !isAdmin(ctx.from.id)) {
