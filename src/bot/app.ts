@@ -57,23 +57,26 @@ export function createBot(token: string) {
   bot.command("help", async (ctx) => {
     const isUserAdmin = ctx.from ? isAdmin(ctx.from.id) : false;
     let helpText =
-      `📖 <b>Paid Channel Bot Help Guide</b>\n\n` +
+      `📖 <b>Paid Channel Subscription Bot Help Guide</b>\n\n` +
       `<b>👤 User Commands:</b>\n` +
       `• <code>/start</code> - Welcome menu & payment UPI info\n` +
-      `• <code>/myplan</code> - Check active subscription validity & expiry\n` +
-      `• <code>/about</code> - Platform info & architecture\n` +
+      `• <code>/myplan</code> or <code>/mystatus</code> - Check active subscription validity & expiry\n` +
+      `• <code>/stories</code> - View available VIP audiobook channel catalog\n` +
+      `• <code>/about</code> - Platform architecture & engine info\n` +
       `• <code>/help</code> - Display this help guide\n`;
 
     if (isUserAdmin) {
       helpText +=
         `\n<b>🛡️ Admin Commands:</b>\n` +
-        `• <code>/admin</code> - Interactive Admin Menu Dashboard\n` +
-        `• <code>/subadd &lt;user_id&gt; [days] [amount] [channel_id] [story]</code>\n` +
-        `• <code>/subextend &lt;user_id&gt; [days] [amount] [channel_id]</code>\n` +
-        `• <code>/subrem &lt;user_id&gt; [channel_id]</code> - Revoke & Kick user\n` +
+        `• <code>/admin</code> - Interactive Admin Control Panel\n` +
+        `• <code>/subadd &lt;user_id&gt; [days=30] [amount=60] [channel_id] [story]</code> - Add subscriber\n` +
+        `• <code>/subextend &lt;user_id&gt; [days=30] [amount] [channel_id]</code> - Extend validity\n` +
+        `• <code>/subrem &lt;user_id&gt; [channel_id]</code> - Revoke & Kick subscriber\n` +
         `• <code>/sublist</code> - View active subscribers list\n` +
-        `• <code>/substats</code> or <code>/stats</code> - View system analytics\n` +
-        `• <code>/channeladd &lt;channel_id&gt; &lt;story_name&gt; [price] [days]</code>\n` +
+        `• <code>/subsync &lt;channel_id&gt; [user_ids...]</code> - Verify & sync members\n` +
+        `• <code>/substats</code> - Subscription analytics & numbers\n` +
+        `• <code>/stats</code> - Hardware specs, RAM/Heap, Uptime & MongoDB Atlas stats\n` +
+        `• <code>/channeladd &lt;channel_id&gt; &lt;story_name&gt; [price] [days]</code> - Register channel slot\n` +
         `• <code>/channellist</code> - View registered channel slots\n` +
         `• <code>/channelrem &lt;channel_id&gt;</code> - Deactivate channel slot\n`;
     }
