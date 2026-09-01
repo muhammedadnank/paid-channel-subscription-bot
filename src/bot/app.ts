@@ -60,7 +60,7 @@ export function createBot(token: string) {
     const args = ctx.match.trim().split(/\s+/);
     if (args.length < 1 || !args[0]) {
       return ctx.reply(
-        "⚠️ <b>Usage:</b> <code>/subadd <user_id> [days=30] [amount=60] [channel_id] [story_name]</code>",
+        "⚠️ <b>Usage:</b> <code>/subadd &lt;user_id&gt; [days=30] [amount=60] [channel_id] [story_name]</code>",
         { parse_mode: "HTML" }
       );
     }
@@ -139,7 +139,7 @@ export function createBot(token: string) {
     const args = ctx.match.trim().split(/\s+/);
     if (args.length < 1 || !args[0]) {
       return ctx.reply(
-        "⚠️ <b>Usage:</b> <code>/subextend <user_id> [additional_days=30] [amount] [channel_id]</code>",
+        "⚠️ <b>Usage:</b> <code>/subextend &lt;user_id&gt; [additional_days=30] [amount] [channel_id]</code>",
         { parse_mode: "HTML" }
       );
     }
@@ -198,7 +198,7 @@ export function createBot(token: string) {
     const args = ctx.match.trim().split(/\s+/);
     if (args.length < 1 || !args[0]) {
       return ctx.reply(
-        "⚠️ <b>Usage:</b> <code>/subrem <user_id> [channel_id]</code>",
+        "⚠️ <b>Usage:</b> <code>/subrem &lt;user_id&gt; [channel_id]</code>",
         { parse_mode: "HTML" }
       );
     }
