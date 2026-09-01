@@ -1,3 +1,5 @@
+import os from "node:os";
+import mongoose from "mongoose";
 import { Bot } from "grammy";
 import { connectToDatabase } from "../db/connection.js";
 import { Subscription } from "../db/models/Subscription.js";
@@ -108,23 +110,71 @@ export function createBot(token: string) {
     return ctx.reply(text, { parse_mode: "HTML" });
   });
 
-  // Command: /stats (Alias for /substats)
+  // Command: /stats (System Hardware, Memory & Database Resource Stats)
   bot.command("stats", async (ctx) => {
     if (!ctx.from || !isAdmin(ctx.from.id)) {
       return ctx.reply("⛔ നിങ്ങൾക്ക് ഈ കമാൻഡ് ഉപയോഗിക്കാൻ അധികാരമില്ല.");
     }
 
     await connectToDatabase();
-    const total = await Subscription.countDocuments();
-    const active = await Subscription.countDocuments({ status: "ACTIVE" });
-    const expired = await Subscription.countDocuments({ status: "EXPIRED" });
+
+    // 1. Process & OS Metrics
+    const uptimeSec = Math.floor(process.uptime());
+    const days = Math.floor(uptimeSec / 86400);
+    const hours = Math.floor((uptimeSec % 86400) / 3600);
+    const mins = Math.floor((uptimeSec % 3600) / 60);
+    const secs = uptimeSec % 60;
+    const uptimeStr = `${days}d ${hours}h ${mins}m ${secs}s`;
+
+    const mem = process.memoryUsage();
+    const rssMB = (mem.rss / 1024 / 1024).toFixed(2);
+    const heapUsedMB = (mem.heapUsed / 1024 / 1024).toFixed(2);
+    const heapTotalMB = (mem.heapTotal / 1024 / 1024).toFixed(2);
+    const totalMemGB = (os.totalmem() / 1024 / 1024 / 1024).toFixed(2);
+    const freeMemGB = (os.freemem() / 1024 / 1024 / 1024).toFixed(2);
+    const cpus = os.cpus();
+    const cpuModel = cpus[0]?.model || "CPU";
+    const cpuCores = cpus.length;
+
+    // 2. Database Metrics (MongoDB Atlas)
+    const dbName = process.env.MONGO_NAME || "paid_sub_db";
+    let dbSizeMB = "0.00";
+    let dbStorageMB = "0.00";
+    let dbCollections = 0;
+    let dbObjects = 0;
+
+    if (mongoose.connection.db) {
+      try {
+        const stats = await mongoose.connection.db.stats();
+        dbSizeMB = ((stats.dataSize || 0) / 1024 / 1024).toFixed(2);
+        dbStorageMB = ((stats.storageSize || 0) / 1024 / 1024).toFixed(2);
+        dbCollections = stats.collections || 0;
+        dbObjects = stats.objects || 0;
+      } catch (e) {}
+    }
+
+    const totalSubs = await Subscription.countDocuments();
+    const activeSubs = await Subscription.countDocuments({ status: "ACTIVE" });
+    const expiredSubs = await Subscription.countDocuments({ status: "EXPIRED" });
+    const totalChannels = await Channel.countDocuments({ is_active: true });
 
     return ctx.reply(
-      `📊 <b>Subscription Platform Analytics</b>\n\n` +
-        `👥 <b>Total Subscribers:</b> <code>${total}</code>\n` +
-        `🟢 <b>Active Subscribers:</b> <code>${active}</code>\n` +
-        `🔴 <b>Expired Subscribers:</b> <code>${expired}</code>\n\n` +
-        `⚡ <b>Deployment Status:</b> Running`,
+      `🖥️ <b>Bot System Hardware & Resource Stats</b>\n\n` +
+        `⚙️ <b>Engine & Process Info:</b>\n` +
+        `• <b>Node.js Version:</b> <code>${process.version}</code>\n` +
+        `• <b>OS Platform:</b> <code>${process.platform} (${os.arch()})</code>\n` +
+        `• <b>Process Uptime:</b> <code>${uptimeStr}</code>\n` +
+        `• <b>CPU Cores:</b> <code>${cpuCores} Cores (${cpuModel})</code>\n\n` +
+        `💾 <b>Memory (RAM) Usage:</b>\n` +
+        `• <b>Process RSS RAM:</b> <code>${rssMB} MB</code>\n` +
+        `• <b>Heap Used / Total:</b> <code>${heapUsedMB} MB / ${heapTotalMB} MB</code>\n` +
+        `• <b>System Total / Free RAM:</b> <code>${totalMemGB} GB / ${freeMemGB} GB</code>\n\n` +
+        `🍃 <b>MongoDB Atlas Database Stats:</b>\n` +
+        `• <b>Database Name:</b> <code>${dbName}</code>\n` +
+        `• <b>Data Size:</b> <code>${dbSizeMB} MB</code> (Storage: ${dbStorageMB} MB)\n` +
+        `• <b>Collections / Documents:</b> <code>${dbCollections} Colls / ${dbObjects} Docs</code>\n` +
+        `• <b>Subscribers (Active/Exp):</b> <code>${totalSubs} Total (${activeSubs} Active / ${expiredSubs} Expired)</code>\n` +
+        `• <b>Active Channels:</b> <code>${totalChannels} Slots</code>`,
       { parse_mode: "HTML" }
     );
   });
