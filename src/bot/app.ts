@@ -5,6 +5,10 @@ import { Subscription } from "../db/models/Subscription.js";
 export function createBot(token: string) {
   const bot = new Bot(token);
 
+  bot.catch((err) => {
+    console.error("❌ grammY Error in handler:", err);
+  });
+
   function isAdmin(userId: number): boolean {
     const adminIds = (process.env.ADMIN_IDS || "")
       .split(",")

@@ -18,11 +18,11 @@ async function startLocalDev() {
   await bot.api.deleteWebhook({ drop_pending_updates: true });
 
   console.log("🚀 Starting local Telegram bot long-polling...");
-  console.log("✅ Bot is online! Send /start to your bot on Telegram.");
 
   bot.start({
     onStart: (info) => {
-      console.log(`🤖 Logged in as @${info.username} (${info.id})`);
+      console.log(`🤖 Logged in as @${info.username} (ID: ${info.id})`);
+      console.log("✅ Bot is online & listening for updates! Send /start on Telegram.");
     },
   });
 }
