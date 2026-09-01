@@ -1,6 +1,7 @@
 import { Bot } from "grammy";
 import { connectToDatabase } from "../db/connection.js";
 import { Subscription } from "../db/models/Subscription.js";
+import { adminMenu } from "./menus/adminMenu.js";
 
 export function createBot(token: string) {
   const bot = new Bot(token);
@@ -11,10 +12,12 @@ export function createBot(token: string) {
 
   bot.use(async (ctx, next) => {
     console.log(
-      `📩 Received update from user ${ctx.from?.id} (${ctx.from?.first_name}): ${ctx.message?.text || ctx.updateType}`
+      `📩 Received update from user ${ctx.from?.id} (${ctx.from?.first_name}): ${ctx.message?.text || "Update"}`
     );
     await next();
   });
+
+  bot.use(adminMenu);
 
   function isAdmin(userId: number): boolean {
     const adminIds = (process.env.ADMIN_IDS || "")
@@ -22,6 +25,17 @@ export function createBot(token: string) {
       .map((id) => parseInt(id.trim(), 10));
     return adminIds.includes(userId);
   }
+
+  // Command: /admin
+  bot.command("admin", async (ctx) => {
+    if (!ctx.from || !isAdmin(ctx.from.id)) {
+      return ctx.reply("⛔ നിങ്ങൾക്ക് ഈ കമാൻഡ് ഉപയോഗിക്കാൻ അധികാരമില്ല.");
+    }
+    await ctx.reply("👑 <b>Paid Channel Admin Control Dashboard:</b>", {
+      parse_mode: "HTML",
+      reply_markup: adminMenu,
+    });
+  });
 
   // Command: /start
   bot.command("start", async (ctx) => {
