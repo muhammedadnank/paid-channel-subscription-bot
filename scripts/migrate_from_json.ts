@@ -10,8 +10,9 @@ async function migrate() {
     process.exit(1);
   }
 
-  await mongoose.connect(mongoUri);
-  console.log("🍃 Connected to MongoDB Atlas for migration.");
+  const dbName = process.env.MONGO_NAME || "paid_sub_db";
+  await mongoose.connect(mongoUri, { dbName });
+  console.log(`🍃 Connected to MongoDB Atlas for migration [Database: ${dbName}].`);
 
   const localdbPath = path.resolve(process.cwd(), "localdb.json");
   if (!fs.existsSync(localdbPath)) {

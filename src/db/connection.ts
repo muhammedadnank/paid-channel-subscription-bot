@@ -12,13 +12,16 @@ export async function connectToDatabase(): Promise<typeof mongoose> {
     throw new Error("MONGO_URI is missing in environment variables!");
   }
 
-  const opts = {
+  const dbName = process.env.MONGO_NAME || "paid_sub_db";
+
+  const opts: mongoose.ConnectOptions = {
+    dbName,
     bufferCommands: false,
     maxPoolSize: 10,
     serverSelectionTimeoutMS: 5000,
   };
 
   cachedConnection = await mongoose.connect(mongoUri, opts);
-  console.log("🍃 Connected to MongoDB Atlas");
+  console.log(`🍃 Connected to MongoDB Atlas [Database: ${dbName}]`);
   return cachedConnection;
 }
