@@ -1,0 +1,36 @@
+{
+  "name": "paid-channel-subscription-bot",
+  "version": "1.0.0",
+  "description": "Telegram Paid Channel Subscription & Management System for Vercel Serverless",
+  "main": "api/bot.ts",
+  "scripts": {
+    "dev": "tsx watch api/bot.ts",
+    "build": "tsc",
+    "type-check": "tsc --noEmit",
+    "migrate": "tsx scripts/migrate_from_json.ts"
+  },
+  "keywords": [
+    "telegram",
+    "bot",
+    "grammy",
+    "vercel",
+    "serverless",
+    "subscription",
+    "paid-channel"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@grammyjs/conversations": "^1.2.0",
+    "@grammyjs/menu": "^1.3.0",
+    "grammy": "^1.30.0",
+    "mongoose": "^8.6.0",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.0",
+    "@types/qrcode": "^1.5.5",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.4"
+  }
+}
