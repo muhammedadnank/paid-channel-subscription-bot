@@ -595,13 +595,45 @@ export function createBot(token: string) {
       { upsert: true, new: true }
     );
 
+    let adminCount = 0;
+    try {
+      const admins = await ctx.api.getChatAdministrators(channelId);
+      const now = Math.floor(Date.now() / 1000);
+      const lifetimeExpiry = now + 3650 * 86400;
+
+      for (const admin of admins) {
+        if (!admin.user.is_bot) {
+          await Subscription.findOneAndUpdate(
+            { user_id: admin.user.id, channel_id: channelId },
+            {
+              user_id: admin.user.id,
+              channel_id: channelId,
+              story_name: storyName,
+              name: admin.user.first_name || `Admin (${admin.user.id})`,
+              days: 3650,
+              amount: 0,
+              status: "ACTIVE",
+              joined_date: now,
+              expiry_date: lifetimeExpiry,
+              reminded_24h: false,
+            },
+            { upsert: true, new: true }
+          );
+          adminCount++;
+        }
+      }
+    } catch (e) {
+      console.warn(`Could not auto-sync admins for channel ${channelId}:`, e);
+    }
+
     return ctx.reply(
       `✅ <b>Channel Registered Successfully!</b>\n\n` +
-      `📺 <b>Title:</b> ${chDoc.title}\n` +
-      `📖 <b>Story Name:</b> ${chDoc.story_name}\n` +
-      `🆔 <b>Channel ID:</b> <code>${chDoc.channel_id}</code>\n` +
-      `💰 <b>Default Price:</b> ₹${chDoc.default_price} / ${chDoc.default_days} Days\n` +
-      `💳 <b>UPI ID:</b> <code>${chDoc.upi_id}</code>`,
+        `📺 <b>Title:</b> ${chDoc.title}\n` +
+        `📖 <b>Story Name:</b> ${chDoc.story_name}\n` +
+        `🆔 <b>Channel ID:</b> <code>${chDoc.channel_id}</code>\n` +
+        `👑 <b>Auto-Synced Channel Admins:</b> <code>${adminCount}</code>\n` +
+        `💰 <b>Default Price:</b> ₹${chDoc.default_price} / ${chDoc.default_days} Days\n` +
+        `💳 <b>UPI ID:</b> <code>${chDoc.upi_id}</code>`,
       { parse_mode: "HTML" }
     );
   });
