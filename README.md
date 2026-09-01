@@ -12,12 +12,12 @@ The complete project architecture, requirements, database models, UI/UX flows, a
 
 | Document | Description | Focus Area |
 | :--- | :--- | :--- |
-| ⚡ [**VERCEL_DEPLOYMENT_PLAN.md**](file:///home/adnanxpkd/projects/Telegram%20Related/Personal%20UserBot%20project/Paid%20Channel%20Subscription%20Plan/VERCEL_DEPLOYMENT_PLAN.md) | **100% Free Vercel Deployment** | Vercel Free Tier setup, grammY Webhook code, Cron endpoints & MongoDB Atlas. |
-| 📄 [**PRD.md**](file:///home/adnanxpkd/projects/Telegram%20Related/Personal%20UserBot%20project/Paid%20Channel%20Subscription%20Plan/PRD.md) | **Product Requirement Document** | Business logic, goals, user roles, feature specifications & lifecycle. |
-| 🛠️ [**TRD.md**](file:///home/adnanxpkd/projects/Telegram%20Related/Personal%20UserBot%20project/Paid%20Channel%20Subscription%20Plan/TRD.md) | **Technical Requirement Document** | Tech stack, system architecture, MTProto / Bot API engine & security. |
-| 🍃 [**DATABASE_PLAN.md**](file:///home/adnanxpkd/projects/Telegram%20Related/Personal%20UserBot%20project/Paid%20Channel%20Subscription%20Plan/DATABASE_PLAN.md) | **MongoDB Database & Indexing Plan** | Collections (`users`, `subscriptions`, `channels`, `transactions`), TTL indexes & aggregations. |
-| 🎨 [**UI_UX_FLOW.md**](file:///home/adnanxpkd/projects/Telegram%20Related/Personal%20UserBot%20project/Paid%20Channel%20Subscription%20Plan/UI_UX_FLOW.md) | **UI/UX & Telegram Bot Interaction Flow** | Bot inline keyboards, interactive menus, Malayalam templates & UI wireframes. |
-| 🗺️ [**IMPLEMENTATION_PLAN.md**](file:///home/adnanxpkd/projects/Telegram%20Related/Personal%20UserBot%20project/Paid%20Channel%20Subscription%20Plan/IMPLEMENTATION_PLAN.md) | **Step-by-Step Implementation Plan** | Phase-by-phase roadmap, modular folder structure & testing guide. |
+| ⚡ [**VERCEL_DEPLOYMENT_PLAN.md**](file:///home/adnanxpkd/projects/Telegram%20Related/Personal%20UserBot%20project/Paid%20Channel%20Subscription%20Plan/docs/VERCEL_DEPLOYMENT_PLAN.md) | **100% Free Vercel Deployment** | Vercel Free Tier setup, grammY Webhook code, Cron endpoints & MongoDB Atlas. |
+| 📄 [**PRD.md**](file:///home/adnanxpkd/projects/Telegram%20Related/Personal%20UserBot%20project/Paid%20Channel%20Subscription%20Plan/docs/PRD.md) | **Product Requirement Document** | Business logic, goals, user roles, feature specifications & lifecycle. |
+| 🛠️ [**TRD.md**](file:///home/adnanxpkd/projects/Telegram%20Related/Personal%20UserBot%20project/Paid%20Channel%20Subscription%20Plan/docs/TRD.md) | **Technical Requirement Document** | Tech stack, system architecture, MTProto / Bot API engine & security. |
+| 🍃 [**DATABASE_PLAN.md**](file:///home/adnanxpkd/projects/Telegram%20Related/Personal%20UserBot%20project/Paid%20Channel%20Subscription%20Plan/docs/DATABASE_PLAN.md) | **MongoDB Database & Indexing Plan** | Collections (`users`, `subscriptions`, `channels`, `transactions`), TTL indexes & aggregations. |
+| 🎨 [**UI_UX_FLOW.md**](file:///home/adnanxpkd/projects/Telegram%20Related/Personal%20UserBot%20project/Paid%20Channel%20Subscription%20Plan/docs/UI_UX_FLOW.md) | **UI/UX & Telegram Bot Interaction Flow** | Bot inline keyboards, interactive menus, Malayalam templates & UI wireframes. |
+| 🗺️ [**IMPLEMENTATION_PLAN.md**](file:///home/adnanxpkd/projects/Telegram%20Related/Personal%20UserBot%20project/Paid%20Channel%20Subscription%20Plan/docs/IMPLEMENTATION_PLAN.md) | **Step-by-Step Implementation Plan** | Phase-by-phase roadmap, modular folder structure & testing guide. |
 
 ---
 
