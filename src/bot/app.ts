@@ -38,6 +38,97 @@ export function createBot(token: string) {
     });
   });
 
+  // Command: /help
+  bot.command("help", async (ctx) => {
+    const isUserAdmin = ctx.from ? isAdmin(ctx.from.id) : false;
+    let helpText =
+      `📖 <b>Paid Channel Bot Help Guide</b>\n\n` +
+      `<b>👤 User Commands:</b>\n` +
+      `• <code>/start</code> - Welcome menu & payment UPI info\n` +
+      `• <code>/myplan</code> - Check active subscription validity & expiry\n` +
+      `• <code>/about</code> - Platform info & architecture\n` +
+      `• <code>/help</code> - Display this help guide\n`;
+
+    if (isUserAdmin) {
+      helpText +=
+        `\n<b>🛡️ Admin Commands:</b>\n` +
+        `• <code>/admin</code> - Interactive Admin Menu Dashboard\n` +
+        `• <code>/subadd &lt;user_id&gt; [days] [amount] [channel_id] [story]</code>\n` +
+        `• <code>/subextend &lt;user_id&gt; [days] [amount] [channel_id]</code>\n` +
+        `• <code>/subrem &lt;user_id&gt; [channel_id]</code> - Revoke & Kick user\n` +
+        `• <code>/sublist</code> - View active subscribers list\n` +
+        `• <code>/substats</code> or <code>/stats</code> - View system analytics\n` +
+        `• <code>/channeladd &lt;channel_id&gt; &lt;story_name&gt; [price] [days]</code>\n` +
+        `• <code>/channellist</code> - View registered channel slots\n` +
+        `• <code>/channelrem &lt;channel_id&gt;</code> - Deactivate channel slot\n`;
+    }
+
+    return ctx.reply(helpText, { parse_mode: "HTML" });
+  });
+
+  // Command: /about
+  bot.command("about", async (ctx) => {
+    return ctx.reply(
+      `ℹ️ <b>About Paid Channel Subscription Bot</b>\n\n` +
+        `🚀 <b>Version:</b> 1.0.0 (Standalone Serverless)\n` +
+        `⚡ <b>Engine:</b> grammY (TypeScript)\n` +
+        `🍃 <b>Database:</b> MongoDB Atlas Cloud\n` +
+        `☁️ <b>Hosting:</b> Vercel Serverless Functions\n\n` +
+        `Automated private Telegram channel gatekeeper with single-use invite links, 24-hour advance renewal warnings, and automated kick/unban routines.`,
+      { parse_mode: "HTML" }
+    );
+  });
+
+  // Command: /myplan
+  bot.command("myplan", async (ctx) => {
+    if (!ctx.from) return;
+    await connectToDatabase();
+    const subs = await Subscription.find({ user_id: ctx.from.id, status: "ACTIVE" });
+
+    if (subs.length === 0) {
+      return ctx.reply(
+        `ℹ️ <b>നിങ്ങൾക്ക് ലോഗിൻ ചെയ്ത ആക്റ്റീവ് സബ്സ്ക്രിപ്ഷനുകൾ ഒന്നും കാണുന്നില്ല.</b>\n\n` +
+          `പുതിയ സബ്സ്ക്രിപ്ഷൻ എടുക്കാൻ അഡ്മിനുമായി ബന്ധപ്പെടുക.`,
+        { parse_mode: "HTML" }
+      );
+    }
+
+    let text = `📋 <b>നിങ്ങളുടെ സബ്സ്ക്രിപ്ഷൻ വിവരങ്ങൾ (${subs.length}):</b>\n\n`;
+    const now = Math.floor(Date.now() / 1000);
+    for (const s of subs) {
+      const expDateStr = new Date(s.expiry_date * 1000).toLocaleString();
+      const remHours = Math.max(0, Math.floor((s.expiry_date - now) / 3600));
+      const remDays = Math.floor(remHours / 24);
+      text +=
+        `• 📺 <b>${s.story_name}</b>\n` +
+        `  🗓️ ഏക്സ്പെയറി: <code>${expDateStr}</code>\n` +
+        `  ⏳ ബാക്കി സമയം: <b>${remDays} ദിവസങ്ങൾ (${remHours} മണിക്കൂർ)</b>\n\n`;
+    }
+
+    return ctx.reply(text, { parse_mode: "HTML" });
+  });
+
+  // Command: /stats (Alias for /substats)
+  bot.command("stats", async (ctx) => {
+    if (!ctx.from || !isAdmin(ctx.from.id)) {
+      return ctx.reply("⛔ നിങ്ങൾക്ക് ഈ കമാൻഡ് ഉപയോഗിക്കാൻ അധികാരമില്ല.");
+    }
+
+    await connectToDatabase();
+    const total = await Subscription.countDocuments();
+    const active = await Subscription.countDocuments({ status: "ACTIVE" });
+    const expired = await Subscription.countDocuments({ status: "EXPIRED" });
+
+    return ctx.reply(
+      `📊 <b>Subscription Platform Analytics</b>\n\n` +
+        `👥 <b>Total Subscribers:</b> <code>${total}</code>\n` +
+        `🟢 <b>Active Subscribers:</b> <code>${active}</code>\n` +
+        `🔴 <b>Expired Subscribers:</b> <code>${expired}</code>\n\n` +
+        `⚡ <b>Deployment Status:</b> Running`,
+      { parse_mode: "HTML" }
+    );
+  });
+
   // Command: /start
   bot.command("start", async (ctx) => {
     const name = ctx.from?.first_name || "User";
