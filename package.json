@@ -4,7 +4,7 @@
   "description": "Telegram Paid Channel Subscription & Management System for Vercel Serverless",
   "main": "api/bot.ts",
   "scripts": {
-    "dev": "tsx watch api/bot.ts",
+    "dev": "tsx watch src/dev.ts",
     "build": "tsc",
     "type-check": "tsc --noEmit",
     "migrate": "tsx scripts/migrate_from_json.ts"
