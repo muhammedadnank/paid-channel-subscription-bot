@@ -9,6 +9,13 @@ export function createBot(token: string) {
     console.error("❌ grammY Error in handler:", err);
   });
 
+  bot.use(async (ctx, next) => {
+    console.log(
+      `📩 Received update from user ${ctx.from?.id} (${ctx.from?.first_name}): ${ctx.message?.text || ctx.updateType}`
+    );
+    await next();
+  });
+
   function isAdmin(userId: number): boolean {
     const adminIds = (process.env.ADMIN_IDS || "")
       .split(",")

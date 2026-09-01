@@ -14,15 +14,22 @@ async function startLocalDev() {
 
   const bot = createBot(token);
 
-  console.log("🚀 Starting local Telegram bot long-polling...");
+  console.log("🤖 Fetching Bot Info from Telegram...");
+  await bot.init();
+  console.log(`🤖 Logged in as @${bot.botInfo.username} (ID: ${bot.botInfo.id})`);
 
-  bot.start({
-    drop_pending_updates: true,
-    onStart: (info) => {
-      console.log(`🤖 Logged in as @${info.username} (ID: ${info.id})`);
-      console.log("✅ Bot is online & listening for updates! Send /start on Telegram.");
-    },
-  });
+  console.log("🧹 Clearing active Telegram Webhook for long-polling...");
+  try {
+    await bot.api.deleteWebhook({ drop_pending_updates: true });
+    console.log("✅ Webhook cleared successfully.");
+  } catch (err: any) {
+    console.warn("⚠️ Warning clearing webhook:", err.message);
+  }
+
+  console.log("🚀 Starting local Telegram bot long-polling...");
+  console.log("✅ Bot is online & listening for updates! Send /start on Telegram.");
+
+  await bot.start();
 }
 
 startLocalDev().catch((err) => {
