@@ -132,7 +132,7 @@ Sell paid access to Telegram channels: single-use invite links, UPI/QR payment g
 | `/api/cron` | `GET`/`POST` | Triggers 24h reminders + auto-kicks (verified via `?secret=CRON_SECRET`) |
 | `/api/dashboard` | `GET` | HTML dashboard — subscriber stats, revenue, recent 50 subscribers |
 
-> ⚠️ **Security note:** `/api/dashboard` currently has **no authentication** — anyone with the URL can view subscriber Telegram IDs, names, and revenue. Treat the deployed dashboard URL as a secret, or add auth (Vercel Password Protection, Basic Auth, or a shared secret query param) before sharing/going live.
+> 🔒 **Security:** `/api/dashboard` requires a shared secret via `?key=<DASHBOARD_SECRET>`. Set `DASHBOARD_SECRET` in your environment — if it's left unset, the dashboard stays open, so always set it before deploying.
 
 ---
 
@@ -170,6 +170,7 @@ cp .env.sample .env
 | `MONGO_NAME` | optional | Database name (default: `paid_sub_db`) |
 | `UPI_ID` | recommended | UPI ID shown to users and encoded in QR codes (default: `merchant@upi`) |
 | `CRON_SECRET` | recommended | Secret required as `?secret=` on `/api/cron` |
+| `DASHBOARD_SECRET` | recommended | Secret required as `?key=` on `/api/dashboard` |
 | `LOG_CHANNEL_ID` | optional | Channel/chat ID where admin activity logs (e.g. sync results) are posted |
 | `DEFAULT_CHANNEL_ID` | optional | Fallback channel ID used by `/subadd`, `/subextend`, `/subrem` when none is passed |
 | `DEFAULT_STORY_NAME` | optional | Fallback plan/story name used by `/subadd` when none is passed |
@@ -297,10 +298,10 @@ Full architecture, requirements, database models, and UI/UX flows live in `docs/
 
 ## ⚠️ Known Issues / TODO
 
-- **`api/dashboard.ts` has no authentication** — add a shared-secret check or Vercel Password Protection before deploying publicly.
-- **`scripts/migrate_from_json.ts`** references a non-existent legacy field `rec.reminded_29d` (should be the subscriber's reminder flag) — it always evaluates to `false`, which happens to match the schema default, but the reference should be corrected for clarity.
-- `.env.sample` doesn't document `LOG_CHANNEL_ID`, `DEFAULT_CHANNEL_ID`, or `DEFAULT_STORY_NAME`, all of which the bot reads from `process.env`.
-- `api/cron.ts` sends reminder/kick notifications sequentially inside a loop — fine for small subscriber counts, but may need batching or a higher `maxDuration` as usage grows.
+- ~~`api/dashboard.ts` has no authentication~~ — ✅ fixed: now requires `?key=<DASHBOARD_SECRET>`.
+- ~~`scripts/migrate_from_json.ts` referenced a non-existent legacy field `rec.reminded_29d`~~ — ✅ fixed: now reads `rec.reminded_24h`.
+- ~~`.env.sample` didn't document `LOG_CHANNEL_ID`, `DEFAULT_CHANNEL_ID`, `DEFAULT_STORY_NAME`~~ — ✅ fixed: added, along with `DASHBOARD_SECRET`.
+- `api/cron.ts` still sends reminder/kick notifications sequentially inside a loop — fine for small subscriber counts, but may need batching or a higher `maxDuration` as usage grows.
 - No automated tests or linting are currently configured.
 
 ---
