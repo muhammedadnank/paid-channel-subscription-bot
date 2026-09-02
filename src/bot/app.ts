@@ -42,20 +42,65 @@ export function createBot(token: string) {
     return adminIds.includes(userId);
   }
 
-  // Command: /admin
-  bot.command("admin", async (ctx) => {
-    if (!ctx.from || !isAdmin(ctx.from.id)) {
-      return ctx.reply("⛔ നിങ്ങൾക്ക് ഈ കമാൻഡ് ഉപയോഗിക്കാൻ അധികാരമില്ല.");
-    }
-    await ctx.reply("👑 <b>Paid Channel Admin Control Dashboard:</b>", {
-      parse_mode: "HTML",
-      reply_markup: adminMenu,
-    });
-  });
+  async function buildStoriesMessage(): Promise<string> {
+    await connectToDatabase();
+    const channels = await Channel.find({ is_active: true });
+    const upiId = process.env.UPI_ID || "merchant@upi";
 
-  // Command: /help
-  bot.command("help", async (ctx) => {
-    const isUserAdmin = ctx.from ? isAdmin(ctx.from.id) : false;
+    if (channels.length === 0) {
+      return (
+        `ℹ️ <b>നിലവിൽ ലഭ്യമായ സബ്സ്ക്രിപ്ഷൻ ചാനലുകൾ ഒന്നുമില്ല.</b>\n\n` +
+        `കൂടുതൽ വിവരങ്ങൾക്ക് അഡ്മിനുമായി ബന്ധപ്പെടുക.`
+      );
+    }
+
+    let msg = `📚 <b>ലഭ്യമായ പ്രീമിയം ഓഡിയോബുക്ക് / വിഐപി ചാനലുകൾ:</b>\n\n`;
+    for (const c of channels) {
+      msg +=
+        `📖 <b>${c.story_name}</b>\n` +
+        `  • ചാനൽ പേര്: ${c.title}\n` +
+        `  • നിരക്ക്: <b>₹${c.default_price} / ${c.default_days} ദിവസങ്ങൾ</b>\n\n`;
+    }
+
+    msg += `💳 <b>സബ്സ്ക്രൈബ് ചെയ്യാൻ UPI ID:</b> <code>${upiId}</code>\n\n` +
+      `പണം അടച്ച ശേഷം സ്ക്രീൻഷോട്ട് അഡ്മിന് അയച്ചു നൽകുക.`;
+
+    return msg;
+  }
+
+  async function buildMyPlanMessage(userId: number): Promise<string> {
+    await connectToDatabase();
+    const subs = await Subscription.find({ user_id: userId, status: "ACTIVE" });
+
+    if (subs.length === 0) {
+      return (
+        `ℹ️ <b>നിങ്ങൾക്ക് ലോഗിൻ ചെയ്ത ആക്റ്റീവ് സബ്സ്ക്രിപ്ഷനുകൾ ഒന്നും കാണുന്നില്ല.</b>\n\n` +
+        `പുതിയ സബ്സ്ക്രിപ്ഷൻ എടുക്കാൻ അഡ്മിനുമായി ബന്ധപ്പെടുക.`
+      );
+    }
+
+    let text = `📋 <b>നിങ്ങളുടെ സബ്സ്ക്രിപ്ഷൻ വിവരങ്ങൾ (${subs.length}):</b>\n\n`;
+    const now = Math.floor(Date.now() / 1000);
+    for (const s of subs) {
+      const expDateStr = new Date(s.expiry_date * 1000).toLocaleString();
+      const remHours = Math.max(0, Math.floor((s.expiry_date - now) / 3600));
+      const remDays = Math.floor(remHours / 24);
+      const totalHours = Math.max(1, Math.floor((s.expiry_date - s.joined_date) / 3600));
+      const pctLeft = Math.max(0, Math.min(100, Math.round((remHours / totalHours) * 100)));
+      const filledBars = Math.round(pctLeft / 10);
+      const bar = "▓".repeat(filledBars) + "░".repeat(10 - filledBars);
+      text +=
+        `• 📺 <b>${s.story_name}</b>\n` +
+        `  🗓️ ഏക്സ്പെയറി: <code>${expDateStr}</code>\n` +
+        `  ⏳ ബാക്കി സമയം: <b>${remDays} ദിവസങ്ങൾ (${remHours} മണിക്കൂർ)</b>\n` +
+        `  ${bar} ${pctLeft}%\n\n`;
+    }
+
+    return text;
+  }
+
+  function buildHelpMessage(userId: number | undefined): string {
+    const isUserAdmin = userId ? isAdmin(userId) : false;
     let helpText =
       `📖 <b>Paid Channel Subscription Bot Help Guide</b>\n\n` +
       `<b>👤 User Commands:</b>\n` +
@@ -81,7 +126,23 @@ export function createBot(token: string) {
         `• <code>/channelrem &lt;channel_id&gt;</code> - Deactivate channel slot\n`;
     }
 
-    return ctx.reply(helpText, { parse_mode: "HTML" });
+    return helpText;
+  }
+
+  // Command: /admin
+  bot.command("admin", async (ctx) => {
+    if (!ctx.from || !isAdmin(ctx.from.id)) {
+      return ctx.reply("⛔ നിങ്ങൾക്ക് ഈ കമാൻഡ് ഉപയോഗിക്കാൻ അധികാരമില്ല.");
+    }
+    await ctx.reply("👑 <b>Paid Channel Admin Control Dashboard:</b>", {
+      parse_mode: "HTML",
+      reply_markup: adminMenu,
+    });
+  });
+
+  // Command: /help
+  bot.command("help", async (ctx) => {
+    return ctx.reply(buildHelpMessage(ctx.from?.id), { parse_mode: "HTML" });
   });
 
   // Command: /about
@@ -99,59 +160,13 @@ export function createBot(token: string) {
 
   // Command: /stories (Catalog of available paid channels)
   bot.command("stories", async (ctx) => {
-    await connectToDatabase();
-    const channels = await Channel.find({ is_active: true });
-    const upiId = process.env.UPI_ID || "merchant@upi";
-
-    if (channels.length === 0) {
-      return ctx.reply(
-        `ℹ️ <b>നിലവിൽ ലഭ്യമായ സബ്സ്ക്രിപ്ഷൻ ചാനലുകൾ ഒന്നുമില്ല.</b>\n\n` +
-        `കൂടുതൽ വിവരങ്ങൾക്ക് അഡ്മിനുമായി ബന്ധപ്പെടുക.`,
-        { parse_mode: "HTML" }
-      );
-    }
-
-    let msg = `📚 <b>ലഭ്യമായ പ്രീമിയം ഓഡിയോബുക്ക് / വിഐപി ചാനലുകൾ:</b>\n\n`;
-    for (const c of channels) {
-      msg +=
-        `📖 <b>${c.story_name}</b>\n` +
-        `  • ചാനൽ പേര്: ${c.title}\n` +
-        `  • നിരക്ക്: <b>₹${c.default_price} / ${c.default_days} ദിവസങ്ങൾ</b>\n\n`;
-    }
-
-    msg += `💳 <b>സബ്സ്ക്രൈബ് ചെയ്യാൻ UPI ID:</b> <code>${upiId}</code>\n\n` +
-      `പണം അടച്ച ശേഷം സ്ക്രീൻഷോട്ട് അഡ്മിന് അയച്ചു നൽകുക.`;
-
-    return ctx.reply(msg, { parse_mode: "HTML" });
+    return ctx.reply(await buildStoriesMessage(), { parse_mode: "HTML" });
   });
 
   // Command: /mystatus (Alias for /myplan)
   bot.command("mystatus", async (ctx) => {
     if (!ctx.from) return;
-    await connectToDatabase();
-    const subs = await Subscription.find({ user_id: ctx.from.id, status: "ACTIVE" });
-
-    if (subs.length === 0) {
-      return ctx.reply(
-        `ℹ️ <b>നിങ്ങൾക്ക് ലോഗിൻ ചെയ്ത ആക്റ്റീവ് സബ്സ്ക്രിപ്ഷനുകൾ ഒന്നും കാണുന്നില്ല.</b>\n\n` +
-        `പുതിയ സബ്സ്ക്രിപ്ഷൻ എടുക്കാൻ അഡ്മിനുമായി ബന്ധപ്പെടുക.`,
-        { parse_mode: "HTML" }
-      );
-    }
-
-    let text = `📋 <b>നിങ്ങളുടെ സബ്സ്ക്രിപ്ഷൻ വിവരങ്ങൾ (${subs.length}):</b>\n\n`;
-    const now = Math.floor(Date.now() / 1000);
-    for (const s of subs) {
-      const expDateStr = new Date(s.expiry_date * 1000).toLocaleString();
-      const remHours = Math.max(0, Math.floor((s.expiry_date - now) / 3600));
-      const remDays = Math.floor(remHours / 24);
-      text +=
-        `• 📺 <b>${s.story_name}</b>\n` +
-        `  🗓️ ഏക്സ്പെയറി: <code>${expDateStr}</code>\n` +
-        `  ⏳ ബാക്കി സമയം: <b>${remDays} ദിവസങ്ങൾ (${remHours} മണിക്കൂർ)</b>\n\n`;
-    }
-
-    return ctx.reply(text, { parse_mode: "HTML" });
+    return ctx.reply(await buildMyPlanMessage(ctx.from.id), { parse_mode: "HTML" });
   });
 
   // Admin Command: /subsync <channel_id> [story_name]
@@ -237,30 +252,7 @@ export function createBot(token: string) {
   // Command: /myplan
   bot.command("myplan", async (ctx) => {
     if (!ctx.from) return;
-    await connectToDatabase();
-    const subs = await Subscription.find({ user_id: ctx.from.id, status: "ACTIVE" });
-
-    if (subs.length === 0) {
-      return ctx.reply(
-        `ℹ️ <b>നിങ്ങൾക്ക് ലോഗിൻ ചെയ്ത ആക്റ്റീവ് സബ്സ്ക്രിപ്ഷനുകൾ ഒന്നും കാണുന്നില്ല.</b>\n\n` +
-        `പുതിയ സബ്സ്ക്രിപ്ഷൻ എടുക്കാൻ അഡ്മിനുമായി ബന്ധപ്പെടുക.`,
-        { parse_mode: "HTML" }
-      );
-    }
-
-    let text = `📋 <b>നിങ്ങളുടെ സബ്സ്ക്രിപ്ഷൻ വിവരങ്ങൾ (${subs.length}):</b>\n\n`;
-    const now = Math.floor(Date.now() / 1000);
-    for (const s of subs) {
-      const expDateStr = new Date(s.expiry_date * 1000).toLocaleString();
-      const remHours = Math.max(0, Math.floor((s.expiry_date - now) / 3600));
-      const remDays = Math.floor(remHours / 24);
-      text +=
-        `• 📺 <b>${s.story_name}</b>\n` +
-        `  🗓️ ഏക്സ്പെയറി: <code>${expDateStr}</code>\n` +
-        `  ⏳ ബാക്കി സമയം: <b>${remDays} ദിവസങ്ങൾ (${remHours} മണിക്കൂർ)</b>\n\n`;
-    }
-
-    return ctx.reply(text, { parse_mode: "HTML" });
+    return ctx.reply(await buildMyPlanMessage(ctx.from.id), { parse_mode: "HTML" });
   });
 
   // Command: /stats (System Hardware, Memory & Database Resource Stats)
@@ -337,11 +329,44 @@ export function createBot(token: string) {
     const name = ctx.from?.first_name || "User";
     const upiId = process.env.UPI_ID || "merchant@upi";
 
+    const startMenu = new InlineKeyboard()
+      .text("📚 View Plans", "menu_stories")
+      .text("📋 My Subscription", "menu_myplan")
+      .row()
+      .text("❓ Help", "menu_help")
+      .text("👤 Contact Admin", "menu_contact");
+
     await ctx.reply(
       `👋 <b>ഹലോ ${name}, Welcome to Paid Channel Subscription Bot!</b>\n\n` +
       `ചാനൽ സബ്സ്ക്രിപ്ഷൻ വിവരങ്ങൾ അറിയാനും പുതുക്കാനും താഴെ കാണുന്ന ഓപ്ഷനുകൾ ഉപയോഗിക്കുക:\n\n` +
       `💳 <b>UPI ID:</b> <code>${upiId}</code>\n\n` +
       `ചോദ്യങ്ങൾക്കോ സഹായങ്ങൾക്കോ അഡ്മിനുമായി ബന്ധപ്പെടുക.`,
+      { parse_mode: "HTML", reply_markup: startMenu }
+    );
+  });
+
+  // Inline menu callbacks (from the /start keyboard)
+  bot.callbackQuery("menu_stories", async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await ctx.reply(await buildStoriesMessage(), { parse_mode: "HTML" });
+  });
+
+  bot.callbackQuery("menu_myplan", async (ctx) => {
+    await ctx.answerCallbackQuery();
+    if (!ctx.from) return;
+    await ctx.reply(await buildMyPlanMessage(ctx.from.id), { parse_mode: "HTML" });
+  });
+
+  bot.callbackQuery("menu_help", async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await ctx.reply(buildHelpMessage(ctx.from?.id), { parse_mode: "HTML" });
+  });
+
+  bot.callbackQuery("menu_contact", async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await ctx.reply(
+      `👤 <b>Contact Admin</b>\n\n` +
+      `സംശയങ്ങളോ പേയ്‌മെന്റ് സംബന്ധിച്ച സഹായങ്ങളോ ഉണ്ടെങ്കിൽ, ഈ ബോട്ട് ലഭ്യമാക്കിയ ചാനലിലെ അഡ്മിനുമായി നേരിട്ട് ബന്ധപ്പെടുക.`,
       { parse_mode: "HTML" }
     );
   });
@@ -509,10 +534,38 @@ export function createBot(token: string) {
       return ctx.reply(`❌ No active subscription record found for user <code>${targetUserId}</code>.`);
     }
 
+    const confirmKeyboard = new InlineKeyboard()
+      .text("✅ Yes, revoke & kick", `confirm_subrem:${targetUserId}:${channelId}`)
+      .text("❌ Cancel", "cancel_action");
+
+    return ctx.reply(
+      `⚠️ <b>Confirm subscription removal?</b>\n\n` +
+        `👤 <b>User:</b> <code>${targetUserId}</code> (${existing.name})\n` +
+        `📺 <b>Channel:</b> <code>${channelId}</code> (${existing.story_name})\n\n` +
+        `This will revoke the subscription and kick the user from the channel.`,
+      { parse_mode: "HTML", reply_markup: confirmKeyboard }
+    );
+  });
+
+  // Confirms & executes the /subrem action
+  bot.callbackQuery(/^confirm_subrem:(-?\d+):(-?\d+)$/, async (ctx) => {
+    if (!ctx.from || !isAdmin(ctx.from.id)) {
+      return ctx.answerCallbackQuery({ text: "⛔ Not authorized.", show_alert: true });
+    }
+
+    const targetUserId = parseInt(ctx.match[1], 10);
+    const channelId = parseInt(ctx.match[2], 10);
+
+    await connectToDatabase();
+    const existing = await Subscription.findOne({ user_id: targetUserId, channel_id: channelId });
+    if (!existing) {
+      await ctx.answerCallbackQuery({ text: "Record no longer exists.", show_alert: true });
+      return ctx.editMessageText("❌ Subscription record no longer exists — nothing to remove.");
+    }
+
     existing.status = "REMOVED";
     await existing.save();
 
-    // Execute Channel Kick via Telegram API if channelId exists
     if (channelId) {
       try {
         await ctx.api.banChatMember(channelId, targetUserId);
@@ -522,11 +575,19 @@ export function createBot(token: string) {
       }
     }
 
-    return ctx.reply(
-      `🗑️ Revoked subscription and kicked user <code>${targetUserId}</code> from channel.`,
+    await ctx.answerCallbackQuery({ text: "Subscription revoked." });
+    return ctx.editMessageText(
+      `🗑️ Revoked subscription and kicked user <code>${targetUserId}</code> from channel <code>${channelId}</code>.`,
       { parse_mode: "HTML" }
     );
   });
+
+  // Shared "Cancel" button for confirmation prompts
+  bot.callbackQuery("cancel_action", async (ctx) => {
+    await ctx.answerCallbackQuery({ text: "Cancelled." });
+    return ctx.editMessageText("❌ Action cancelled — no changes made.");
+  });
+
 
   // Admin Command: /sublist
   bot.command("sublist", async (ctx) => {
@@ -674,12 +735,42 @@ export function createBot(token: string) {
 
     const channelId = parseInt(args[0], 10);
     await connectToDatabase();
+    const channel = await Channel.findOne({ channel_id: channelId });
+    if (!channel) {
+      return ctx.reply(`❌ No registered channel found with ID <code>${channelId}</code>.`, {
+        parse_mode: "HTML",
+      });
+    }
 
+    const confirmKeyboard = new InlineKeyboard()
+      .text("✅ Yes, deactivate", `confirm_channelrem:${channelId}`)
+      .text("❌ Cancel", "cancel_action");
+
+    return ctx.reply(
+      `⚠️ <b>Confirm channel deactivation?</b>\n\n` +
+        `📺 <b>Channel:</b> ${channel.title} (<code>${channelId}</code>)\n` +
+        `📖 <b>Story:</b> ${channel.story_name}\n\n` +
+        `This will stop new subscriptions/renewals for this channel slot (existing subscribers are unaffected).`,
+      { parse_mode: "HTML", reply_markup: confirmKeyboard }
+    );
+  });
+
+  // Confirms & executes the /channelrem action
+  bot.callbackQuery(/^confirm_channelrem:(-?\d+)$/, async (ctx) => {
+    if (!ctx.from || !isAdmin(ctx.from.id)) {
+      return ctx.answerCallbackQuery({ text: "⛔ Not authorized.", show_alert: true });
+    }
+
+    const channelId = parseInt(ctx.match[1], 10);
+    await connectToDatabase();
     await Channel.findOneAndUpdate({ channel_id: channelId }, { is_active: false });
-    return ctx.reply(`🗑️ Channel slot <code>${channelId}</code> deactivated.`, {
+
+    await ctx.answerCallbackQuery({ text: "Channel deactivated." });
+    return ctx.editMessageText(`🗑️ Channel slot <code>${channelId}</code> deactivated.`, {
       parse_mode: "HTML",
     });
   });
+
 
   // Admin Command: /substats
   bot.command("substats", async (ctx) => {
