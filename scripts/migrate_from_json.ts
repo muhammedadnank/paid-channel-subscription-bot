@@ -45,7 +45,7 @@ async function migrate() {
         status: String(rec.status || "ACTIVE").toUpperCase(),
         joined_date: Number(rec.joined_date || 0),
         expiry_date: Number(rec.expiry_date || 0),
-        reminded_24h: Boolean(rec.reminded_29d || false),
+        reminded_24h: Boolean(rec.reminded_24h || false),
         last_kicked_at: rec.last_kicked || null,
       },
       { upsert: true, new: true }
