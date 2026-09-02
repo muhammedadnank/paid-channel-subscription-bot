@@ -147,11 +147,84 @@ npm run migrate
 
 ---
 
-## ☁️ Deployment
+## ☁️ Deployment (Vercel)
 
-This project is designed to deploy on **Vercel's free tier** using serverless functions and a webhook-based bot (no polling, no always-on server needed).
+This project is designed to deploy on **Vercel's free tier** using serverless functions and a **webhook-based bot** (no polling, no always-on server needed).
 
-See [`docs/VERCEL_DEPLOYMENT_PLAN.md`](./docs/VERCEL_DEPLOYMENT_PLAN.md) for the full step-by-step deployment guide, including cron job setup for automated expiry checks and reminders.
+### 1. Push to GitHub
+
+Make sure your latest code (with `.env` **excluded** via `.gitignore`) is pushed to a GitHub repository.
+
+### 2. Import the Project into Vercel
+
+- Go to [vercel.com/new](https://vercel.com/new)
+- Select **Import Git Repository** and choose this repo
+- Framework preset: **Other** (it's picked up automatically via `vercel.json`)
+
+### 3. Add Environment Variables
+
+In **Project Settings → Environment Variables**, add everything from `.env.sample`, e.g.:
+
+| Variable | Description |
+|---|---|
+| `BOT_TOKEN` | Telegram bot token from [@BotFather](https://t.me/BotFather) |
+| `MONGODB_URI` | MongoDB Atlas connection string |
+| `ADMIN_IDS` | Comma-separated Telegram admin user IDs |
+| `WEBHOOK_SECRET` | Random secret used to verify Telegram webhook calls |
+| `CRON_SECRET` | Random secret used to authenticate the cron endpoint |
+
+### 4. Deploy
+
+Click **Deploy** — Vercel will build the project using the `build` script (`tsc`) and deploy `api/bot.ts` and `api/cron.ts` as serverless functions.
+
+Alternatively, deploy from the CLI:
+
+```bash
+npm install -g vercel
+vercel login
+vercel --prod
+```
+
+### 5. Register the Telegram Webhook
+
+Once deployed, point your bot at the Vercel function URL:
+
+```bash
+curl -F "url=https://<your-project>.vercel.app/api/bot" \
+     -F "secret_token=<WEBHOOK_SECRET>" \
+     https://api.telegram.org/bot<BOT_TOKEN>/setWebhook
+```
+
+Verify it's set correctly:
+
+```bash
+curl https://api.telegram.org/bot<BOT_TOKEN>/getWebhookInfo
+```
+
+### 6. Set Up the Cron Job (Expiry Checks & Reminders)
+
+Since Vercel's free tier has limited built-in cron frequency, use an external scheduler to hit your cron endpoint periodically:
+
+- **Option A — [cron-job.org](https://cron-job.org):** Create a job that sends a `GET`/`POST` request to `https://<your-project>.vercel.app/api/cron` (with the `CRON_SECRET` as a header or query param) every few minutes.
+- **Option B — [Upstash QStash](https://upstash.com/docs/qstash):** Schedule the same endpoint via QStash's cron scheduler for more reliability.
+- **Option C — [Vercel Cron Jobs](https://vercel.com/docs/cron-jobs):** Define a schedule directly in `vercel.json`:
+
+```json
+{
+  "crons": [
+    { "path": "/api/cron", "schedule": "*/10 * * * *" }
+  ]
+}
+```
+
+> ⚠️ On the Vercel Hobby (free) plan, cron jobs are limited to a minimum daily run — check current Vercel limits before relying on this alone; external schedulers (cron-job.org / QStash) give more frequent, reliable ticks for expiry checks.
+
+### 7. Verify
+
+- Send `/start` to your bot in Telegram — it should respond via the webhook.
+- Manually trigger `/api/cron` once to confirm it connects to MongoDB and processes expiries without errors.
+
+For the full deep-dive (MongoDB Atlas setup, index strategy, and phase-by-phase rollout), see [`docs/VERCEL_DEPLOYMENT_PLAN.md`](./docs/VERCEL_DEPLOYMENT_PLAN.md).
 
 ---
 
