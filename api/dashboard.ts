@@ -6,6 +6,12 @@ import { Subscription } from "../src/db/models/Subscription.js";
 
 export default async function handler(req: any, res: any) {
   try {
+    // Security: require a shared secret as ?key=... before exposing any subscriber data
+    const dashboardSecret = process.env.DASHBOARD_SECRET;
+    if (dashboardSecret && req.query.key !== dashboardSecret) {
+      return res.status(401).send("Unauthorized: missing or invalid ?key= parameter");
+    }
+
     await connectToDatabase();
 
     const total = await Subscription.countDocuments();
